@@ -24,7 +24,7 @@ import jwt from "jsonwebtoken"
 //     throw new ApiError(500, "Unable to genrate access token or refresh token")
 //   }
 
-// }
+// } 
 
 const genrateAccessAndRefreshToken = async (userId) => {
   try {
@@ -269,13 +269,45 @@ const refreshToken = asyncHandler(async (req, res, next) => {
   const incomingRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken
   if (incomingRefreshToken) throw new ApiError(401, "unauthorised request")
 
-  const decodedToken = jwt.verify(incomingRefreshToken, REFRESH_TOKEN_SECRET)
+  try {
+    const decodedToken = jwt.verify(incomingRefreshToken, REFRESH_TOKEN_SECRET)
 
+    const user = await User.findById(decodedToken?._id)
 
+    if (!user) throw new ApiError(401, "invalid refresh token")
+
+    if (incomingRefreshToken !== user?._id) {
+      throw new ApiError(401, "unauthorised refresh token")
+    }
+
+    const options = {
+      httpOnly: true,
+      secure: true
+    }
+
+    const { newRefreshToken, accessToken } = genrateAccessAndRefreshToken(user._id)
+
+    return res
+      .status(200)
+      .cookie("refreshToken", newRefreshToken, options)
+      .cookie("accessToken", accessToken, options)
+      .json(new
+        ApiResponse(
+          200,
+          {
+            accessToken, refreshToken: newRefreshToken
+          },
+          "Access Token Refreshed"
+        )
+      )
+  } catch (error) {
+    throw new ApiError(500, "unable to refresh token: " + error?.message)
+  }
 })
 
 export {
   registerUser,
   loginUser,
-  logoutUser
+  logoutUser,
+  refreshToken
 };
