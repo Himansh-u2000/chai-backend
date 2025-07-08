@@ -1,10 +1,10 @@
+import jwt from "jsonwebtoken";
 import { REFRESH_TOKEN_SECRET } from "../constants.js";
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadFileOnCloudinary } from "../utils/cloudinary.js";
-import jwt from "jsonwebtoken"
 
 
 // const genrateAccessAndRefreshToken = async (userId) => {
@@ -307,9 +307,132 @@ const refreshToken = asyncHandler(async (req, res, next) => {
   }
 })
 
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+  const { oldPassword, newPassword, confirmPassword } = req.body;
+  if (newPassword !== confirmPassword) {
+    throw new ApiError(400, "password does not match")
+  }
+
+  const user = await User.findById(req.user._id)
+
+  if (!user) {
+    throw new ApiError(400, "user does not exist")
+  }
+
+  if (!(user.isPasswordCorrect(oldPassword))) {
+    throw new ApiError(401, "old password does not match")
+  }
+
+  user.password = newPassword
+  await user.save({ validateBeforeSave: false })
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        null,
+        "Password changed successfully"
+      )
+    )
+
+})
+
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+  return res
+    .status(200)
+    .json(new ApiResponse(
+      200,
+      req.user,
+      "user successfully fetched"
+    ))
+})
+
+const updateAcccountDetails = asyncHandler(async (req, res) => {
+  const { username, fullName, email } = req.body
+
+  if ([username, fullName, email].some((field) => field?.trim() === "")) {
+    throw new ApiResponse(400, "All fields are required")
+  }
+
+  try {
+    const user = await User.findByIdAndUpdate(req.user?._id,
+      {
+        $set: {
+          username,
+          email,
+          fullName
+        }
+      },
+      {
+        new: true
+      }
+    ).select("-password")
+
+    if (!user) {
+      throw new ApiError(400, "unable to update user")
+    }
+
+    return res
+      .status(200)
+      .json(new ApiResponse(
+        200,
+        user,
+        "details updated successfully"
+      ))
+  } catch (error) {
+    throw new ApiError(500, "unable to find update details: ", error.message)
+  }
+})
+
+const updateUserAvatar = asyncHandler(async (req, res) => {
+  const localeAvatar = req.files?.avatar[0]?.path;
+
+  console.log(localeAvatar)
+
+  if (!localeAvatar) {
+    throw new ApiError(500, "file not available in local storage")
+  }
+
+  const avatar = await uploadFileOnCloudinary(localeAvatar)
+
+  if (!avatar) {
+    throw new ApiError(200, "unable to upload file")
+  }
+
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user?._id,
+      {
+        $set: {
+          avatar: avatar?.url || ""
+        }
+      },
+      {
+        new: true
+      }
+    ).select("-password")
+
+    return res
+      .status(200)
+      .json(new ApiResponse(
+        200,
+        user,
+        "image uploaded successfully"
+      ))
+  } catch (error) {
+    throw new ApiError(500, "unable to update file")
+  }
+})
+
 export {
-  registerUser,
+  changeCurrentPassword,
+  getCurrentUser,
   loginUser,
   logoutUser,
-  refreshToken
+  refreshToken,
+  registerUser,
+  updateAcccountDetails,
+  updateUserAvatar
 };
