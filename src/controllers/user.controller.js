@@ -165,13 +165,10 @@ const loginUser = asyncHandler(async (req, res) => {
   // send response of 200 and refresh token to client
 
 
-  const { username, email, password } = req.body;
+  const { email, password } = req.body;
 
-  if (!email && !username) {
+  if (!email) {
     throw new ApiError(400, "email is required")
-  }
-  if (!username) {
-    throw new ApiError(400, "username is required")
   }
 
   if (!password) {
@@ -179,7 +176,7 @@ const loginUser = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findOne({
-    $or: [{ email }, { username }]
+    $or: [{ email }]
   })
 
   if (!user) throw new ApiError(404, "user not found")
@@ -193,10 +190,10 @@ const loginUser = asyncHandler(async (req, res) => {
 
   const options = {
     httpOnly: true,
-    secure: true
+    secure: false,
   }
 
-  const loggedInUser = await User.findById(user._id).select("-password ")
+  const loggedInUser = await User.findById(user._id).select("-password")
 
   return res
     .status(200)
